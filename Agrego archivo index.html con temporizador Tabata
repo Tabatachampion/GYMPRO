@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tabata Timer</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; background-color: #f4f4f4; }
+    .container { max-width: 400px; margin: 50px auto; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 0 10px gray; }
+    button { margin: 10px; padding: 10px 20px; cursor: pointer; }
+    .highlight { padding: 20px; margin: 10px auto; border-radius: 10px; font-size: 1.5em; font-weight: bold; }
+    .work { background-color: green; color: white; }
+    .rest { background-color: red; color: white; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Tabata Timer</h1>
+    <div id="highlightBox" class="highlight">Listo / Ready</div>
+    <h2 id="roundInfo">Ciclo / Cycle: 0 - Set: 0</h2>
+    <h3 id="countdown">0</h3>
+    <h4 id="totalTime">Tiempo total / Total Time: 0 min</h4>
+    <button onclick="startTimer()">Iniciar / Start</button>
+    <button onclick="pauseTimer()">Pausar / Pause</button>
+    <button onclick="resumeTimer()">Reanudar / Resume</button>
+    <button onclick="resetTimer()">Reiniciar / Reset</button>
+    <br><br>
+    <label>Preparación / Preparation (s): <input type="number" id="prepTime" value="10"></label><br>
+    <label>Trabajo / Work (s): <input type="number" id="workTime" value="20"></label><br>
+    <label>Descanso / Rest (s): <input type="number" id="restTime" value="10"></label><br>
+    <label>Sets: <input type="number" id="sets" value="4"></label><br>
+    <label>Ciclos / Cycles: <input type="number" id="cycles" value="3"></label><br>
+  </div>
+
+  <script>
+    let interval, currentRound = 0, timeLeft, paused = false;
+    let sequence = [];
+
+    // Audios públicos para trabajo, descanso y preparación
+    const prepSound = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
+    const workSound = new Audio("https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg");
+    const restSound = new Audio("https://actions.google.com/sounds/v1/alarms/bugle_tune.ogg");
+
+    function startTimer() {
+      clearInterval(interval);
+      let prep = parseInt(document.getElementById("prepTime").value);
+      let work = parseInt(document.getElementById("workTime").value);
+      let rest = parseInt(document.getElementById("restTime").value);
+      let sets = parseInt(document.getElementById("sets").value);
+      let cycles = parseInt(document.getElementById("cycles").value);
+      let totalTime = (prep + (work + rest) * sets) * cycles / 60;
+      document.getElementById("totalTime").innerText = "Tiempo total / Total Time: " + totalTime.toFixed(2) + " min";
+
+      let phases = [{ name: "Preparación / Preparation", time: prep, sound: prepSound, class: "" }];
+      for (let i = 0; i < sets; i++) {
+        phases.push({ name: "Trabajo / Work", time: work, sound: workSound, class: "work" });
+        phases.push({ name: "Descanso / Rest", time: rest, sound: restSound, class: "rest" });
+      }
+
+      sequence = [];
+      for (let i = 0; i < cycles; i++) sequence.push(...phases);
+
+      currentRound = 0;
+      paused = false;
+      runPhase();
+    }
+
+    function runPhase() {
+      clearInterval(interval);
+
+      if (currentRound >= sequence.length) {
+        document.getElementById("highlightBox").innerText = "¡Fin del Tabata! / Tabata Finished!";
+        document.getElementById("highlightBox").className = "highlight";
+        document.getElementById("roundInfo").innerText = "Ciclo / Cycle: Completado";
+        document.getElementById("countdown").innerText = "0";
+        return;
+      }
+
+      let phase = sequence[currentRound];
+      document.getElementById("highlightBox").innerText = phase.name;
+      document.getElementById("highlightBox").className = "highlight " + phase.class;
+      document.getElementById("countdown").innerText = phase.time;
+      let cycles = parseInt(document.getElementById("cycles").value);
+      let sets = parseInt(document.getElementById("sets").value);
+      document.getElementById("roundInfo").innerText = "Ciclo / Cycle: " +
+        (Math.floor(currentRound / ((sets*2)+1)) + 1) +
+        " - Set: " + (Math.floor((currentRound - 1) / 2) % sets + 1);
+
+      phase.sound.currentTime = 0;
+      phase.sound.play();
+
+      timeLeft = phase.time;
+
+      interval = setInterval(() => {
+        if (!paused) {
+          timeLeft--;
+          document.getElementById("countdown").innerText = timeLeft;
+          if (timeLeft <= 0) {
+            clearInterval(interval);
+            currentRound++;
+            runPhase();
+          }
+        }
+      }, 1000);
+    }
+
+    function pauseTimer() {
+      paused = true;
+    }
+
+    function resumeTimer() {
+      if (paused) paused = false;
+    }
+
+    function resetTimer() {
+      clearInterval(interval);
+      currentRound = 0;
+      paused = false;
+      sequence = [];
+
+      document.getElementById("highlightBox").innerText = "Listo / Ready";
+      document.getElementById("highlightBox").className = "highlight";
+      document.getElementById("roundInfo").innerText = "Ciclo / Cycle: 0 - Set: 0";
+      document.getElementById("countdown").innerText = "0";
+      document.getElementById("totalTime").innerText = "Tiempo total / Total Time: 0 min";
+    }
+  </script>
+</body>
+</html>
