@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Tabata Timer</title>
+  <title>Tabata Timer Mejorado</title>
   <style>
     body { font-family: Arial, sans-serif; text-align: center; background-color: #f4f4f4; }
     .container { max-width: 400px; margin: 50px auto; padding: 20px; background: white; border-radius: 10px; box-shadow: 0 0 10px gray; }
     button { margin: 10px; padding: 10px 20px; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
     .highlight { padding: 20px; margin: 10px auto; border-radius: 10px; font-size: 1.5em; font-weight: bold; }
     .work { background-color: green; color: white; }
     .rest { background-color: red; color: white; }
@@ -15,25 +16,25 @@
 </head>
 <body>
   <div class="container">
-    <h1>Tabata Timer</h1>
+    <h1>Tabata Timer Mejorado</h1>
     <div id="highlightBox" class="highlight">Listo / Ready</div>
     <h2 id="roundInfo">Ciclo / Cycle: 0 - Set: 0</h2>
     <h3 id="countdown">0</h3>
     <h4 id="totalTime">Tiempo total / Total Time: 0 min</h4>
-    <button onclick="startTimer()">Iniciar / Start</button>
-    <button onclick="pauseTimer()">Pausar / Pause</button>
-    <button onclick="resumeTimer()">Reanudar / Resume</button>
-    <button onclick="resetTimer()">Reiniciar / Reset</button>
+    <button id="startBtn" onclick="startTimer()">Iniciar / Start</button>
+    <button id="pauseBtn" onclick="pauseTimer()" disabled>Pausar / Pause</button>
+    <button id="resumeBtn" onclick="resumeTimer()" disabled>Reanudar / Resume</button>
+    <button id="resetBtn" onclick="resetTimer()" disabled>Reiniciar / Reset</button>
     <br><br>
-    <label>Preparación / Preparation (s): <input type="number" id="prepTime" value="10"></label><br>
-    <label>Trabajo / Work (s): <input type="number" id="workTime" value="20"></label><br>
-    <label>Descanso / Rest (s): <input type="number" id="restTime" value="10"></label><br>
-    <label>Sets: <input type="number" id="sets" value="4"></label><br>
-    <label>Ciclos / Cycles: <input type="number" id="cycles" value="3"></label><br>
+    <label>Preparación / Preparation (s): <input type="number" id="prepTime" value="10" min="0"></label><br>
+    <label>Trabajo / Work (s): <input type="number" id="workTime" value="20" min="1"></label><br>
+    <label>Descanso / Rest (s): <input type="number" id="restTime" value="10" min="0"></label><br>
+    <label>Sets: <input type="number" id="sets" value="4" min="1"></label><br>
+    <label>Ciclos / Cycles: <input type="number" id="cycles" value="3" min="1"></label><br>
   </div>
 
   <script>
-    let interval, currentRound = 0, timeLeft, paused = false;
+    let interval, currentPhaseIndex = 0, timeLeft, paused = false;
     let sequence = [];
 
     // Audios públicos para trabajo, descanso y preparación
@@ -42,49 +43,73 @@
     const restSound = new Audio("https://actions.google.com/sounds/v1/alarms/bugle_tune.ogg");
 
     function startTimer() {
-      clearInterval(interval);
-      let prep = parseInt(document.getElementById("prepTime").value);
-      let work = parseInt(document.getElementById("workTime").value);
-      let rest = parseInt(document.getElementById("restTime").value);
-      let sets = parseInt(document.getElementById("sets").value);
-      let cycles = parseInt(document.getElementById("cycles").value);
-      let totalTime = (prep + (work + rest) * sets) * cycles / 60;
-      document.getElementById("totalTime").innerText = "Tiempo total / Total Time: " + totalTime.toFixed(2) + " min";
+      // Validar inputs
+      const prep = Math.max(0, parseInt(document.getElementById("prepTime").value));
+      const work = Math.max(1, parseInt(document.getElementById("workTime").value));
+      const rest = Math.max(0, parseInt(document.getElementById("restTime").value));
+      const sets = Math.max(1, parseInt(document.getElementById("sets").value));
+      const cycles = Math.max(1, parseInt(document.getElementById("cycles").value));
 
-      let phases = [{ name: "Preparación / Preparation", time: prep, sound: prepSound, class: "" }];
+      // Calcular tiempo total en minutos
+      const totalTime = (prep + (work + rest) * sets) * cycles / 60;
+      document.getElementById("totalTime").innerText = `Tiempo total / Total Time: ${totalTime.toFixed(2)} min`;
+
+      // Crear secuencia de fases: Preparación + sets (trabajo + descanso)
+      const phases = [{ name: "Preparación / Preparation", time: prep, sound: prepSound, class: "" }];
       for (let i = 0; i < sets; i++) {
         phases.push({ name: "Trabajo / Work", time: work, sound: workSound, class: "work" });
-        phases.push({ name: "Descanso / Rest", time: rest, sound: restSound, class: "rest" });
+        if (rest > 0) phases.push({ name: "Descanso / Rest", time: rest, sound: restSound, class: "rest" });
       }
 
+      // Repetir fases por ciclos
       sequence = [];
-      for (let i = 0; i < cycles; i++) sequence.push(...phases);
+      for (let i = 0; i < cycles; i++) {
+        sequence.push(...phases);
+      }
 
-      currentRound = 0;
+      currentPhaseIndex = 0;
       paused = false;
+
+      toggleButtons(true);
       runPhase();
     }
 
     function runPhase() {
       clearInterval(interval);
 
-      if (currentRound >= sequence.length) {
+      if (currentPhaseIndex >= sequence.length) {
         document.getElementById("highlightBox").innerText = "¡Fin del Tabata! / Tabata Finished!";
         document.getElementById("highlightBox").className = "highlight";
         document.getElementById("roundInfo").innerText = "Ciclo / Cycle: Completado";
         document.getElementById("countdown").innerText = "0";
+
+        toggleButtons(false, true);
         return;
       }
 
-      let phase = sequence[currentRound];
+      const phase = sequence[currentPhaseIndex];
       document.getElementById("highlightBox").innerText = phase.name;
       document.getElementById("highlightBox").className = "highlight " + phase.class;
       document.getElementById("countdown").innerText = phase.time;
-      let cycles = parseInt(document.getElementById("cycles").value);
-      let sets = parseInt(document.getElementById("sets").value);
-      document.getElementById("roundInfo").innerText = "Ciclo / Cycle: " +
-        (Math.floor(currentRound / ((sets*2)+1)) + 1) +
-        " - Set: " + (Math.floor((currentRound - 1) / 2) % sets + 1);
+
+      const sets = Math.max(1, parseInt(document.getElementById("sets").value));
+      const cycles = Math.max(1, parseInt(document.getElementById("cycles").value));
+
+      // Mostrar ciclo y set correctos (preparación + sets)
+      // El patrón por ciclo: 1 fase de preparación + sets * (trabajo + posible descanso)
+      const phasesPerCycle = 1 + sets * (rest > 0 ? 2 : 1);
+      const currentCycle = Math.floor(currentPhaseIndex / phasesPerCycle) + 1;
+
+      // El índice dentro del ciclo (omitiendo preparación)
+      const indexInCycle = currentPhaseIndex % phasesPerCycle;
+      let currentSet = 0;
+      if (indexInCycle === 0) {
+        currentSet = 0; // fase de preparación del ciclo
+      } else {
+        currentSet = Math.ceil(indexInCycle / (rest > 0 ? 2 : 1));
+      }
+
+      document.getElementById("roundInfo").innerText = `Ciclo / Cycle: ${currentCycle} - Set: ${currentSet}`;
 
       phase.sound.currentTime = 0;
       phase.sound.play();
@@ -97,7 +122,7 @@
           document.getElementById("countdown").innerText = timeLeft;
           if (timeLeft <= 0) {
             clearInterval(interval);
-            currentRound++;
+            currentPhaseIndex++;
             runPhase();
           }
         }
@@ -106,15 +131,19 @@
 
     function pauseTimer() {
       paused = true;
+      toggleButtons(true, false, true);
     }
 
     function resumeTimer() {
-      if (paused) paused = false;
+      if (paused) {
+        paused = false;
+        toggleButtons(true);
+      }
     }
 
     function resetTimer() {
       clearInterval(interval);
-      currentRound = 0;
+      currentPhaseIndex = 0;
       paused = false;
       sequence = [];
 
@@ -123,7 +152,22 @@
       document.getElementById("roundInfo").innerText = "Ciclo / Cycle: 0 - Set: 0";
       document.getElementById("countdown").innerText = "0";
       document.getElementById("totalTime").innerText = "Tiempo total / Total Time: 0 min";
+
+      toggleButtons(false);
     }
+
+    // Función para habilitar o deshabilitar botones según estado
+    // startEnabled: habilita botón Iniciar
+    // pauseEnabled: habilita botón Pausar
+    // resumeEnabled: habilita botón Reanudar
+    // resetEnabled: habilita botón Reiniciar
+    function toggleButtons(startEnabled, pauseEnabled = false, resumeEnabled = false, resetEnabled = false) {
+      document.getElementById("startBtn").disabled = !startEnabled;
+      document.getElementById("pauseBtn").disabled = !pauseEnabled;
+      document.getElementById("resumeBtn").disabled = !resumeEnabled;
+      document.getElementById("resetBtn").disabled = !resetEnabled;
+    }
+
   </script>
 </body>
 </html>
